@@ -1,6 +1,8 @@
 # Data / Image Files
 *.csv
+*.zip
 *.png
+*.CSV
 
 # Editors
 .vscode/
