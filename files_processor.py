@@ -36,8 +36,9 @@ def files_cleaning(path_source, path_destination):
     print('importando arquivo do IPCA')
     ipca = pd.read_csv('ipca_historico.csv',';')
     ipca.columns = ['periodo','ano','mes','indicador','var_mes','var_3_meses','var_6_meses','var_ano','var_12_meses']
+    ipca['periodo'] = ipca.periodo.astype(str)
     ipca = ipca[ipca.periodo.isin(file_names_list)]
-    ipca_index = ipca.indicador
+    ipca_index = ipca.indicador.values
     print('série do IPCA importada com sucesso')
 
     # lendo, corrigindo os dados e salvando em outro arquivo
@@ -54,14 +55,18 @@ def files_cleaning(path_source, path_destination):
         # adicionando coluna com o período (ano + mes)
         file_df['PERIODO'] = file_df.ANO.astype(str)+file_df.MES.astype(str).str.zfill(2)
         print('coluna PERIODO adicionada com sucesso')
+        # trazendo o indicador de inflacao para o período
+        ipca_index = ipca[ipca.periodo == file.strip('.CSV')]
+        ipca_index = ipca_index.indicador.values
+        print('ipca de ' + file.strip('.CSV'), ipca_index)
         # deflacionando a série, fórmula: tarifa/índice*100
         # Número Índice (Dez/93 = 100)
-        tarifa_deflacionada = file_df.TARIFA / ipca_index * 100
+        tarifa_deflacionada = (file_df.TARIFA * 100) / ipca_index
         file_df['TARIFA DEFLACIONADA'] = tarifa_deflacionada
         # desagrupando os valores por assento:
         file_df = file_df.loc[file_df.index.repeat(file_df.ASSENTOS)]
         # excluindo coluna ASSENTOS:
-        file_df = file_df[['PERIODO','ANO','MES','EMPRESA', 'ORIGEM','DESTINO','TARIFA']]
+        file_df = file_df[['PERIODO','ANO','MES','EMPRESA','ORIGEM','DESTINO','TARIFA','TARIFA DEFLACIONADA']]
         print('ajustes finalizados com sucesso')
         # gravando arquivo ajustado:
         file_df.to_csv(path_destination+'/tarifas_df_' + file.strip('.CSV') + '.csv')
