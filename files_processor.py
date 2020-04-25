@@ -14,7 +14,7 @@ def files_cleaning(path_source, path_destination):
         - DEFLATING PRICES WITH CONSUMER INDEX (IPCA series) TO 12/1993=100.
     """
     print('###########################################################################')
-    print('INICIANDO O PROCESSO')
+    print('INICIANDO O PROCESSO DE LIMPEZA DOS DADOS')
 
     # listando os arquivos dentro do path_source
     print('procurando os arquivos no diretório')
