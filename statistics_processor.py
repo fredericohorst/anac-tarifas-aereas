@@ -84,22 +84,19 @@ def apllying_basic_statistics(dataframe, origem_icao, destino_icao, bs_size):
     tarifa_media_percentil_025 = []
     tarifa_media_percentil_500 = []
     tarifa_media_percentil_975 = []
-
+    periodos = tarifas_sts.PERIODO.unique()
+    
     # calculando o intervalo de confiança da média da tarifa: ######
-    ##########################################
-    ##########################################
-    # -->>> corrigir, vai dar erro // Length of values does not match length of index
     print('calculando o intervalo de confiança da média da tarifa')
-    df = dataframe.copy()
-    ic_tarifa_media = basic_statistics.draw_bs_reps(df.TARIFA, np.mean, size = bs_size)
-    print('ics calculados')
-    tarifa_media_percentil_025.append(np.percentile(ic_tarifa_media, 2.5))
-    print(np.percentile(ic_tarifa_media, 2.5))
-    tarifa_media_percentil_975.append(np.percentile(ic_tarifa_media, 97.5))
-    print(np.percentile(ic_tarifa_media, 97.5))
-    tarifa_media_percentil_500.append(np.percentile(ic_tarifa_media, 50.0)) # mediana
-    print(np.percentile(ic_tarifa_media, 50.0))
-    df = None
+    for periodo in periodos:
+        df = dataframe.copy()
+        df = df[df.PERIODO == periodo]
+        ic_tarifa_media = basic_statistics.draw_bs_reps(df.TARIFA, np.mean, size = bs_size)
+        print('ics calculados para o período de ' + str(periodo))
+        tarifa_media_percentil_025.append(np.percentile(ic_tarifa_media, 2.5))
+        tarifa_media_percentil_975.append(np.percentile(ic_tarifa_media, 97.5))
+        tarifa_media_percentil_500.append(np.percentile(ic_tarifa_media, 50.0)) # mediana
+        df = None
 
     tarifas_sts['TARIFA MÉDIA - PERCENTIL 2,5'] = tarifa_media_percentil_025
     tarifas_sts['TARIFA MÉDIA - PERCENTIL 50'] = tarifa_media_percentil_500
