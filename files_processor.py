@@ -3,7 +3,11 @@
 ##################################################################
 
 import os
+# import logging
 import pandas as pd
+
+# logging.basicConfig(level=logging.DEBUG,
+#                     format='%(asctime)s %(levelname)s %(funcName)s => %(message)s')
 
 def files_cleaning(path_source, path_destination):
     """
