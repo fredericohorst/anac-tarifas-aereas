@@ -72,8 +72,12 @@ def files_cleaning(path_source, path_destination):
         # excluindo coluna ASSENTOS:
         file_df = file_df[['PERIODO','ANO','MES','EMPRESA','ORIGEM','DESTINO','TARIFA','TARIFA DEFLACIONADA']]
         print('ajustes finalizados com sucesso')
+        origens = file_df.ORIGEM.unique()
         # gravando arquivo ajustado:
-        file_df.to_csv(path_destination+'/tarifas_df_' + file.strip('.CSV') + '.csv')
+        for origem in origens:
+            file_df_origem = file_df[file_df.ORIGEM == origem]
+            file_df_origem.to_csv(path_destination+'/tarifas_df_' + file.strip('.CSV') + '_' + origem + '.csv')
+            file_df_origem = None
         file_df = None
         print('arquivo salvo com sucesso na pasta ' + path_destination)
 
