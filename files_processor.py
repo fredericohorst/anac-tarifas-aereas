@@ -4,12 +4,27 @@
 
 import os
 # import logging
-import pandas as pd
+
+import numpy as np  # type: ignore[import]
+import pandas as pd  # type: ignore[import]
+
+# Enable Arrow-based columnar data transfers
+# spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
+
+from pyspark.sql import SparkSession, SQLContext
+
+spark = SparkSession.builder \
+        .master("local") \
+        .appName("anac-prices") \
+        .config("spark.some.config.option", "some-value") \
+        .getOrCreate()
+
+sqlContext = SQLContext(spark)
 
 # logging.basicConfig(level=logging.DEBUG,
 #                     format='%(asctime)s %(levelname)s %(funcName)s => %(message)s')
 
-def files_cleaning(path_source, path_destination):
+def files_cleaning(path_source,inflation_file): #, path_destination):
     """
     FUNCTION TO CLEAN THE FILES DATA, PERFORMING:
         - TARIFA AS FLOAT AND WITH . AS DECIMAL SEPARATOR;
@@ -18,68 +33,78 @@ def files_cleaning(path_source, path_destination):
         - DEFLATING PRICES WITH CONSUMER INDEX (IPCA series) TO 12/1993=100.
     """
     print('###########################################################################')
-    print('INICIANDO O PROCESSO DE LIMPEZA DOS DADOS')
+    print('BEGGINING DATA CLEANING PROCESS')
 
-    # listando os arquivos dentro do path_source
-    print('procurando os arquivos no diretório')
+    # listing files inside the path_source
     files = os.listdir(path_source)
-    # listando os arquivos com o nome correto dentro da lista de arquivos
+    # selecting only the files with the correct name inside the path_source
     files_list = []
     for file in files:
         if len(file) == 10:
-            files_list.append(file)
+            files_list.append(file.strip('.CSV'))
         else:
             pass
 
-    # listando os periodos dos arquivos da anac:
-    file_names_list = []
-    for file in files_list:
-        file_names_list.append(file.strip('.CSV'))
 
-    # importando a série histórica do IPCA:
-    print('importando arquivo do IPCA')
-    ipca = pd.read_csv('ipca_historico.csv',';')
-    ipca.columns = ['periodo','ano','mes','indicador','var_mes','var_3_meses','var_6_meses','var_ano','var_12_meses']
-    ipca['periodo'] = ipca.periodo.astype(str)
-    ipca = ipca[ipca.periodo.isin(file_names_list)]
-    ipca_index = ipca.indicador.values
-    print('série do IPCA importada com sucesso')
+    # reading IPCA inflation series:
+    print('importing IPCA file')
+    ipca = sqlContext.read.csv(inflation_file, sep=";", inferSchema="true", header="true")
+    ipca.registerTempTable('ipca')
+    ipca_handling = """
+        SELECT
+            CAST(`Período` AS STRING) AS year_month, 
+            `Ano` AS year,
+            `Mês` AS month,
+            `Número Índice (Dez/93 = 100)` AS ipca_index,
+            `Variação no Mês` AS var_month,
+            `Variação 3 Meses` AS var_3_months,
+            `Variação 6 Meses` AS var_6_months, 
+            `Variação no Ano` AS var_year,
+            `Variação 12 Meses` AS var_12_months
+        FROM ipca
+        """
+    ipca = sqlContext.sql(ipca_handling)
+    ipca = ipca.filter(ipca.year_month.isin(files_list))
+    print('Inflation series imported successfully')
 
-    # lendo, corrigindo os dados e salvando em outro arquivo
+    # reading, correcting data and saving results in other file
     print('#########################')
-    print('iniciando a limpeza dos arquivos')
-    colunas = ['ANO','MES','EMPRESA','ORIGEM','DESTINO','TARIFA','ASSENTOS']
-    import_data = []
-    for file in files_list:
-        print('arquivo: '+path_source+'/'+file)
-        file_df = pd.read_csv(path_source+'/'+file, sep=';',header=1,names=colunas)
-        # corrigindo a tarifa para float:
-        file_df['TARIFA'] = file_df.TARIFA.str.replace(',','.').astype(float)
-        print('tarifa corrigida para float')
-        # adicionando coluna com o período (ano + mes)
-        file_df['PERIODO'] = file_df.ANO.astype(str)+file_df.MES.astype(str).str.zfill(2)
-        print('coluna PERIODO adicionada com sucesso')
-        # trazendo o indicador de inflacao para o período
-        ipca_index = ipca[ipca.periodo == file.strip('.CSV')]
-        ipca_index = ipca_index.indicador.values
-        print('ipca de ' + file.strip('.CSV'), ipca_index)
-        # deflacionando a série, fórmula: tarifa/índice*100
-        # Número Índice (Dez/93 = 100)
-        tarifa_deflacionada = (file_df.TARIFA * 100) / ipca_index
-        file_df['TARIFA DEFLACIONADA'] = tarifa_deflacionada
-        # desagrupando os valores por assento:
-        file_df = file_df.loc[file_df.index.repeat(file_df.ASSENTOS)]
-        # excluindo coluna ASSENTOS:
-        file_df = file_df[['PERIODO','ANO','MES','EMPRESA','ORIGEM','DESTINO','TARIFA','TARIFA DEFLACIONADA']]
-        print('ajustes finalizados com sucesso')
-        origens = file_df.ORIGEM.unique()
-        # gravando arquivo ajustado:
-        for origem in origens:
-            file_df_origem = file_df[file_df.ORIGEM == origem]
-            file_df_origem.to_csv(path_destination+'/tarifas_df_' + file.strip('.CSV') + '_' + origem + '.csv')
-            file_df_origem = None
-        file_df = None
-        print('arquivo salvo com sucesso na pasta ' + path_destination)
+    print('beginning data cleaning')
 
-    print('FIM DO PROCESSO')
+    path_files_list = []
+    for file in files_list:
+        path = path_source+'/'+file+'.CSV'
+        path_files_list.append(path)
+
+    anac_source = sqlContext.read.csv(path_files_list,sep=";", inferSchema="true", header="true")
+    anac_source.registerTempTable('anac_source')
+    anac_handling1 = """
+        SELECT 
+            ANO AS year,
+            MES AS month,
+            CONCAT(CAST(ANO AS STRING), LPAD(CAST(MES AS STRING),2, '0')) AS year_month,
+            EMPRESA AS company,
+            ORIGEM AS origin,
+            DESTINO AS destination,
+            CAST(REPLACE(TARIFA, ',', '.') AS FLOAT) AS tariff,
+            ASSENTOS AS seats
+        FROM anac_source
+        """
+    anac_handling1 = sqlContext.sql(anac_handling1)
+
+    anac_handling1.registerTempTable('anac_handling1')
+    ipca.registerTempTable('ipca')
+
+    anac_handling2 = """
+        SELECT 
+            anac_handling1.*,
+            anac_handling1.tariff * 100 / ipca.ipca_index AS deflated_tariff
+        FROM anac_handling1
+        LEFT JOIN ipca ON ipca.year_month = anac_handling1.year_month
+        """
+
+    anac_table = sqlContext.sql(anac_handling2)
+
+    print('THIS IS THE END')
     print('###########################################################################')
+    return anac_table
