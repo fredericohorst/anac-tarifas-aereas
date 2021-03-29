@@ -86,6 +86,7 @@ def files_cleaning(path_source,inflation_file): #, path_destination):
             EMPRESA AS company,
             ORIGEM AS origin,
             DESTINO AS destination,
+            CONCAT(ORIGEM, '>', DESTINO) AS route,
             CAST(REPLACE(TARIFA, ',', '.') AS FLOAT) AS tariff,
             ASSENTOS AS seats
         FROM anac_source
